@@ -56,25 +56,33 @@ weights: Normal 0, Needs Review 3, Risky 10 - bands: Low <= 30, Medium <= 60, Hi
 ```
 
 ## 3. Prerequisites
-- **ml-service/** — FastAPI. PyMuPDF/pdfplumber/pypdf extraction, rule engine
-  + trained TF-IDF+LinearSVC classifier, extractive summarizer.
-
-## 2. Prerequisites
 
 - Node.js 18+ (`node --version`) and Python 3.10+ (`python --version`).
-- MongoDB is **optional**: empty `MONGODB_URI` = built-in in-memory store.
+- **MongoDB** running locally (`mongodb://127.0.0.1:27017`) — the server stores
+  agreements in the `loanlens` database. [MongoDB Compass](https://www.mongodb.com/products/compass)
+  is recommended to browse the data. If `MONGODB_URI` is empty or MongoDB is
+  down, the API automatically falls back to a built-in in-memory store.
+- **Python ML deps**: `torch`, `transformers`, `scikit-learn` (see
+  `ml-service/requirements.txt`). The transformer summariser (`t5-small`) is
+  downloaded from Hugging Face on first start (~240 MB, cached afterwards).
 - No Docker, no GPU needed for the demo.
 - Windows PowerShell commands below (`e:\loanLens` = repo root).
 
-## 3. First-time setup (run once, PowerShell)
+## 4. First-time setup (run once, PowerShell)
 
 ```powershell
 Copy-Item e:\loanLens\.env.example e:\loanLens\.env
 
+# 1) make sure MongoDB is running (skip if the service is already up)
+Get-Service MongoDB*            # Status should be Running
+Start-Service MongoDB           # or: net start MongoDB
+
+# 2) node dependencies
 cd e:\loanLens\client; npm install
 cd e:\loanLens\server; npm install
 # or from repo root:  cd e:\loanLens; npm run install:all
 
+# 3) python dependencies (ML service)
 cd e:\loanLens\ml-service; pip install -r requirements.txt
 # only needed for retraining:  pip install pyarrow datasets
 ```
@@ -82,7 +90,27 @@ cd e:\loanLens\ml-service; pip install -r requirements.txt
 The trained artifact (`ml-service/models/artifacts/clause_risk_classifier.joblib`)
 is already shipped — **no retrain needed to run**.
 
-## 4. How to run (3 terminals, in order)
+### MongoDB Compass (browse the database)
+
+Root `.env` points the API at the local MongoDB server:
+
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/loanlens
+```
+
+1. Open **MongoDB Compass** → connect string `mongodb://127.0.0.1:27017` →
+   **Connect**.
+2. Select the **`loanlens`** database → collection **`agreements`** — this is
+   where uploaded documents, clauses and reports are persisted (demo data is
+   seeded on first boot).
+3. To clear demo data: delete the documents in `agreements` from Compass and
+   restart the API.
+
+> Leave `MONGODB_URI` empty to run without MongoDB (in-memory store; data is
+> lost on every restart). `GET /api/health` reports which storage is active
+> (`dependencies.database.storage`: `mongodb` vs `in-memory`).
+
+## 5. How to run (3 terminals, in order)
 
 ### Terminal 1 — ML service :8000 (start FIRST)
 
@@ -181,8 +209,9 @@ python scripts/smoke_test.py
   hold-out acc 93.7% / macro-F1 74.9%.
 - Per-class test F1: Normal 0.95, Needs Review 0.83, Risky 0.75.
 - Settings page shows engine + model + metrics live from
-  `GET /api/dashboard/meta`. Summarizer is an extractive fallback,
-  only the classifier claim above is trained.
+  `GET /api/dashboard/meta`. The **summarizer** is `transformers:t5-small`
+  (a real seq2seq model, loaded via `AutoModelForSeq2SeqLM` on transformers
+  5.x); only the classifier claim above is task-trained.
 
 ## 9. Retraining the model (optional)
 
@@ -219,10 +248,13 @@ ML base `http://127.0.0.1:8000`: `GET /health`,
 
 Root `.env` (copy of `.env.example`; `server/.env` overrides it).
 Key values: `PORT=5000`, `ML_SERVICE_URL=http://127.0.0.1:8000`,
-`MONGODB_URI=` (empty = in-memory demo store), `MAX_UPLOAD_MB=20`,
-`DEMO_MODE=true`, `SEED_DEMO_DATA=true`, `VITE_API_BASE_URL=/api`,
-`ENABLE_TRANSFORMERS=false`. Vite dev proxy forwards `/api`
-to Express so the browser never hard-codes a host.
+`MONGODB_URI=mongodb://127.0.0.1:27017/loanlens` (empty = in-memory demo
+store), `MAX_UPLOAD_MB=20`, `DEMO_MODE=true`, `SEED_DEMO_DATA=true`,
+`VITE_API_BASE_URL=/api`, `ENABLE_TRANSFORMERS=true` (loads the `t5-small`
+summariser; the classifier only uses a transformer when fine-tuned weights
+exist and otherwise keeps the trained TF-IDF model).
+The ML service reads the same root `.env`, and Vite dev proxy forwards
+`/api` to Express so the browser never hard-codes a host.
 
 ## 12. Project structure
 
@@ -246,6 +278,13 @@ loanLens/
   then `Stop-Process -Id <PID>`.
 - `heuristic fallback`: restore or retrain
   `ml-service/models/artifacts/clause_risk_classifier.joblib`, restart ML.
+- `rule-based-extractive-fallback` in Settings: the first `t5-small` boot
+  downloads ~240 MB from Hugging Face — wait for `Loaded transformer
+  summariser` in the ML log, then restart. Requires `ENABLE_TRANSFORMERS=true`.
+- `in-memory` instead of `mongodb` in `/api/health`: start MongoDB
+  (`Start-Service MongoDB`) and check `MONGODB_URI` in the root `.env`.
+- `EADDRINUSE :5000/:8000`: a stale process holds the port —
+  `netstat -ano | findstr :5000`, then `taskkill /PID <PID> /F`.
 - `REPORT_NOT_READY (409)`: poll `GET /api/agreements/:id` until completed.
 - Upload rejected: PDF only, max 20 MB. Scanned PDFs need Tesseract.
 - UI blank on :5000: run `npm run build` in `client/` or use `:5173` dev.

@@ -14,12 +14,12 @@ export default function useAsync(loader, deps = [], options = {}) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(immediate);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true; // re-arm: React 18 StrictMode mounts, unmounts, remounts
+    return () => {
       mountedRef.current = false;
-    },
-    []
-  );
+    };
+  }, []);
 
   const run = useCallback(async () => {
     setLoading(true);

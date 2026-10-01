@@ -5,6 +5,20 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+# Load the repository root .env (if present) BEFORE the Settings dataclass is
+# defined, so ENABLE_TRANSFORMERS and ML_* values behave exactly like they do
+# for the Node server (which reads the same file).
+try:  # pragma: no cover - trivial side effect
+    from dotenv import load_dotenv
+
+    import pathlib as _pathlib
+
+    _root_env = _pathlib.Path(__file__).resolve().parents[2] / ".env"
+    if _root_env.exists():
+        load_dotenv(_root_env, override=False)
+except Exception:  # noqa: BLE001 - dotenv is optional
+    pass
+
 
 def _as_bool(value: str | None, fallback: bool = False) -> bool:
     if value is None or value == "":

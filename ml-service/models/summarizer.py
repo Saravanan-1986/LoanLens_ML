@@ -51,6 +51,8 @@ class ClauseSummarizer:
 
     def __init__(self) -> None:
         self._pipeline = None
+        self._tokenizer = None
+        self._model = None
         self._attempted = False
         self._model_name = FALLBACK_MODEL_NAME
 
@@ -60,7 +62,7 @@ class ClauseSummarizer:
 
     @property
     def using_transformer(self) -> bool:
-        return self._pipeline is not None
+        return self._pipeline is not None or self._model is not None
 
     def status(self) -> dict:
         return {
@@ -72,9 +74,15 @@ class ClauseSummarizer:
 
     # -- loading -------------------------------------------------------
     def load(self) -> bool:
-        """Attempt to load the transformer pipeline exactly once."""
+        """Attempt to load the summariser exactly once.
+
+        Tries the ``summarization`` pipeline first (transformers 4.x), then
+        falls back to loading the seq2seq model directly with
+        ``AutoModelForSeq2SeqLM`` (required on transformers 5.x, which no
+        longer registers the ``summarization`` task).
+        """
         if self._attempted:
-            return self._pipeline is not None
+            return self.using_transformer
         self._attempted = True
 
         if not settings.enable_transformers:
@@ -84,27 +92,50 @@ class ClauseSummarizer:
             )
             return False
 
+        target = settings.summarizer_weights or settings.summarizer_model
+
+        # 1) Classic pipeline API (transformers 4.x).
         try:
             from transformers import pipeline as hf_pipeline  # type: ignore
 
-            target = settings.summarizer_weights or settings.summarizer_model
             self._pipeline = hf_pipeline("summarization", model=target)
             self._model_name = f"transformers:{target}"
-            logger.info("Loaded transformer summariser: %s", target)
+            logger.info("Loaded transformer summariser (pipeline): %s", target)
+            return True
+        except Exception as exc:  # pragma: no cover - environment dependent
+            logger.info(
+                "Pipeline summariser unavailable (%s) - trying direct seq2seq load.",
+                exc,
+            )
+
+        # 2) Direct seq2seq load (works on transformers 5.x).
+        try:
+            from transformers import (  # type: ignore
+                AutoModelForSeq2SeqLM,
+                AutoTokenizer,
+            )
+
+            self._tokenizer = AutoTokenizer.from_pretrained(target)
+            self._model = AutoModelForSeq2SeqLM.from_pretrained(target)
+            self._model.eval()
+            self._model_name = f"transformers:{target}"
+            logger.info("Loaded transformer summariser (direct seq2seq): %s", target)
         except Exception as exc:  # pragma: no cover - environment dependent
             logger.warning(
                 "Could not load the transformer summariser (%s) - using the rule based fallback.",
                 exc,
             )
             self._pipeline = None
+            self._tokenizer = None
+            self._model = None
             self._model_name = FALLBACK_MODEL_NAME
 
-        return self._pipeline is not None
+        return self.using_transformer
 
     # -- inference -----------------------------------------------------
     def summarize(self, text: str) -> dict:
         """Summarise a single clause."""
-        if self._pipeline is None and settings.enable_transformers and not self._attempted:
+        if not self.using_transformer and settings.enable_transformers and not self._attempted:
             self.load()
 
         if self._pipeline is not None:
@@ -118,6 +149,35 @@ class ClauseSummarizer:
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning(
                     "Transformer summarisation failed (%s) - using the rule based fallback.", exc
+                )
+
+        if self._model is not None and self._tokenizer is not None:
+            # Direct seq2seq path (transformers 5.x has no summarization pipeline).
+            try:
+                import torch  # type: ignore
+
+                snippet = (text or "")[: settings.max_model_chars]
+                inputs = self._tokenizer(
+                    PROMPT_PREFIX + snippet,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=settings.max_model_chars,
+                )
+                with torch.no_grad():
+                    output_ids = self._model.generate(
+                        **inputs,
+                        max_new_tokens=120,
+                        num_beams=4,
+                        early_stopping=True,
+                    )
+                summary = normalise_whitespace(
+                    self._tokenizer.decode(output_ids[0], skip_special_tokens=True)
+                )
+                if summary:
+                    return {"summary": self._polish(summary), "model": self._model_name}
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "Seq2seq summarisation failed (%s) - using the rule based fallback.", exc
                 )
 
         return {"summary": self.summarize_extractive(text), "model": FALLBACK_MODEL_NAME}

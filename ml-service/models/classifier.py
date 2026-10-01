@@ -125,6 +125,8 @@ class RiskClassifier:
         self._trained_meta: dict = {}
         self._attempted = False
         self._trained_attempted = False
+        self._worth_checked = False
+        self._worth = False
         self._model_name = FALLBACK_MODEL_NAME
 
     @property
@@ -159,12 +161,48 @@ class RiskClassifier:
 
 
     # -- loading -------------------------------------------------------
+    def _transformer_worth_attempting(self) -> bool:
+        """Only try a transformer when it can actually beat the classical model.
+
+        A generic checkpoint (e.g. ``distilbert-base-uncased``) has a random
+        classification head, so loading it would *replace* the 90%+ accurate
+        trained TF-IDF model with garbage. The transformer path is therefore
+        only attempted when fine-tuned weights exist: either an explicit
+        ``ML_CLASSIFIER_WEIGHTS`` or the artifact produced by
+        ``training.train_transformer``. The decision is memoised so the log
+        stays quiet during batch prediction.
+        """
+        if self._worth_checked:
+            return self._worth
+        self._worth_checked = True
+
+        if not settings.enable_transformers:
+            logger.info(
+                "Transformer classifier disabled (ENABLE_TRANSFORMERS is not true)."
+            )
+            self._worth = False
+        elif settings.classifier_weights:
+            self._worth = True
+        else:
+            has_artifact = (transformer_artifact_path() / "config.json").exists()
+            if not has_artifact:
+                logger.info(
+                    "No fine-tuned transformer weights found - using the trained "
+                    "classical model instead of a generic checkpoint."
+                )
+            self._worth = has_artifact
+        return self._worth
+
     def load(self) -> bool:
-        """Attempt to load the transformer, then the trained classical model."""
-        loaded = self.load_transformer()
-        if not loaded:
-            loaded = self.load_trained()
-        return loaded
+        """Load the best available engine.
+
+        Order: fine-tuned transformer (only when weights exist) -> trained
+        classical model -> heuristic keyword fallback (never unloaded silently;
+        every engine is labelled in ``status()``).
+        """
+        if self._transformer_worth_attempting() and self.load_transformer():
+            return True
+        return self.load_trained()
 
     def load_transformer(self) -> bool:
         """Load the HuggingFace sequence classifier exactly once."""
@@ -253,7 +291,11 @@ class RiskClassifier:
     # -- inference -----------------------------------------------------
     def predict(self, text: str) -> dict:
         """Classify a single clause with the best available engine."""
-        if self._pipeline is None and not self._attempted and settings.enable_transformers:
+        if (
+            self._pipeline is None
+            and not self._attempted
+            and self._transformer_worth_attempting()
+        ):
             self.load_transformer()
         if self._pipeline is None and self._trained is None and not self._trained_attempted:
             self.load_trained()
