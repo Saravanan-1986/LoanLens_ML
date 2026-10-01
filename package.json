@@ -1,0 +1,21 @@
+{
+  "name": "loanlens",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LoanLens - AI powered loan agreement analysis platform (React + Express + FastAPI).",
+  "keywords": [
+    "loanlens",
+    "loan-agreement",
+    "risk-analysis",
+    "nlp"
+  ],
+  "scripts": {
+    "dev:client": "npm --prefix client run dev",
+    "dev:server": "npm --prefix server run dev",
+    "dev:ml": "python -m uvicorn app:app --reload --port 8000 --app-dir ml-service",
+    "install:all": "npm --prefix client install && npm --prefix server install",
+    "build:client": "npm --prefix client run build",
+    "start:server": "npm --prefix server start"
+  },
+  "license": "MIT"
+}

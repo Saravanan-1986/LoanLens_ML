@@ -1,0 +1,52 @@
+{
+  "train": {
+    "total": 8434,
+    "labels": {
+      "Normal": 4297,
+      "Needs Review": 2177,
+      "Risky": 1960
+    },
+    "sources": {
+      "unfair_tos": 4225,
+      "loan_corpus": 157,
+      "cuad": 4052
+    }
+  },
+  "validation": {
+    "total": 1779,
+    "labels": {
+      "Normal": 1202,
+      "Risky": 304,
+      "Needs Review": 273
+    },
+    "sources": {
+      "unfair_tos": 1277,
+      "cuad": 474,
+      "loan_corpus": 28
+    }
+  },
+  "test": {
+    "total": 759,
+    "labels": {
+      "Needs Review": 116,
+      "Risky": 129,
+      "Normal": 514
+    },
+    "sources": {
+      "cuad": 210,
+      "unfair_tos": 537,
+      "loan_corpus": 12
+    }
+  },
+  "unfair_tos_test": {
+    "total": 1215,
+    "labels": {
+      "Normal": 1067,
+      "Risky": 106,
+      "Needs Review": 42
+    },
+    "sources": {
+      "unfair_tos": 1215
+    }
+  }
+}

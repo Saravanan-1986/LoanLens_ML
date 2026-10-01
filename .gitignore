@@ -1,0 +1,64 @@
+# ---------------------------------------------------------------------------
+# LoanLens - repository ignore rules
+# ---------------------------------------------------------------------------
+
+# Dependencies
+node_modules/
+*/node_modules/
+.pnp
+.pnp.js
+
+# Environment / secrets  (NEVER commit these)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Uploaded / private documents
+server/uploads/*
+!server/uploads/.gitkeep
+uploads/
+*.pdf
+!client/public/*.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ml-cache/
+ml-service/models/weights/
+ml-service/models/checkpoints/
+
+# Build output
+client/dist/
+client/.vite/
+build/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# TypeScript must never exist in this project (guard).
+*.ts
+*.tsx
+!*.d.ts
+tsconfig*.json

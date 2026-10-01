@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------------
+# LoanLens ML service - optional model / OCR extras
+#
+# Install these to enable the full pipeline:
+#   * PyMuPDF + pdfplumber : faster, higher quality PDF text extraction
+#   * Tesseract OCR        : reading scanned / image based agreements
+#   * Transformers + Torch : real DistilBERT/BART style models
+#
+#   pip install -r requirements-ml.txt
+#
+# Tesseract itself must also be installed on the machine and (on Windows)
+# its folder added to PATH, or TESSERACT_CMD set in the environment.
+# ---------------------------------------------------------------------------
+
+# --- PDF text extraction ---------------------------------------------------
+PyMuPDF>=1.24.0
+pdfplumber>=0.11.0
+
+# --- OCR for scanned documents --------------------------------------------
+pytesseract>=0.3.10
+pdf2image>=1.17.0
+Pillow>=10.2.0
+
+# --- Transformer models (classification + summarisation) -------------------
+transformers>=4.40.0
+torch>=2.2.0
+sentencepiece>=0.2.0
+scikit-learn>=1.4.0

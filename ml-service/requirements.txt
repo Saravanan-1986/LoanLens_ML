@@ -1,0 +1,16 @@
+# ---------------------------------------------------------------------------
+# LoanLens ML service - core dependencies
+#
+# These are intentionally light so the service starts quickly and works
+# everywhere. The heavier OCR / transformer stack lives in
+# `requirements-ml.txt` (optional extras).
+#
+#   pip install -r requirements.txt          # core (works out of the box)
+#   pip install -r requirements-ml.txt       # adds OCR + transformer models
+# ---------------------------------------------------------------------------
+
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+python-multipart>=0.0.9
+pypdf>=4.2.0
