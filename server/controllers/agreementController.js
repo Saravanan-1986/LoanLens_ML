@@ -13,18 +13,19 @@ const analysisPipeline = require('../services/analysisPipeline');
 const documentService = require('../services/documentService');
 const riskService = require('../services/riskService');
 const { buildAggregateStats } = require('../services/statsService');
-const demoData = require('../seed/demoData');
 const { sanitizeFilename, clampString } = require('../utils/sanitize');
 const config = require('../config/env');
 
 /**
  * Convert a stored record into the shape the frontend consumes.
- * `storedFilename` is deliberately omitted so filesystem details never leak.
+ * `storedFilename` and `ownerId` are deliberately omitted so filesystem and
+ * ownership details never leak.
  */
 function toPublic(agreement) {
   if (!agreement) return null;
   const {
     storedFilename,
+    ownerId,
     _id,
     __v,
     updatedAt,
@@ -40,7 +41,7 @@ function toPublic(agreement) {
   };
 }
 
-/** Lightweight list row (no clause payload). */
+/** Lightweight list row (no clause payload, but keeps the document summary). */
 function toListItem(agreement) {
   const pub = toPublic(agreement);
   return {
@@ -53,10 +54,17 @@ function toListItem(agreement) {
     overallRisk: pub.overallRisk,
     overallRiskScore: pub.overallRiskScore,
     riskSummary: pub.riskSummary,
+    documentSummary: pub.documentSummary || '',
+    summaryHighlights: pub.summaryHighlights || [],
     fileSizeLabel: pub.fileSizeLabel,
-    isDemo: pub.isDemo,
     error: pub.error
   };
+}
+
+/** True when the signed-in user owns this agreement. */
+function isOwner(agreement, user) {
+  if (!agreement || !user) return false;
+  return String(agreement.ownerId || '') === String(user.id);
 }
 
 /** POST /api/agreements/upload */
@@ -84,6 +92,7 @@ async function uploadAgreement(req, res, next) {
     const originalFilename = sanitizeFilename(req.file.originalname);
 
     const agreement = await repository.create({
+      ownerId: req.user.id,
       filename: originalFilename,
       originalFilename,
       storedFilename: path.basename(req.file.path),
@@ -110,20 +119,10 @@ async function uploadAgreement(req, res, next) {
 async function analyzeAgreement(req, res, next) {
   try {
     const agreement = await repository.findById(req.params.id);
-    if (!agreement) {
+    if (!agreement || !isOwner(agreement, req.user)) {
       return res.status(404).json({
         success: false,
         error: { code: 'NOT_FOUND', message: 'That agreement could not be found.' }
-      });
-    }
-
-    if (agreement.isDemo) {
-      return res.status(409).json({
-        success: false,
-        error: {
-          code: 'DEMO_RECORD',
-          message: 'This is a demo record with pre-generated results. Upload a PDF to run a real analysis.'
-        }
       });
     }
 
@@ -175,7 +174,7 @@ async function listAgreements(req, res, next) {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const search = clampString(req.query.search, 80).toLowerCase();
 
-    let agreements = await repository.list({ status, limit: 200 });
+    let agreements = await repository.list({ status, limit: 200, ownerId: req.user.id });
     if (search) {
       agreements = agreements.filter((item) => item.filename.toLowerCase().includes(search));
     }
@@ -199,7 +198,7 @@ async function listAgreements(req, res, next) {
 async function getAgreement(req, res, next) {
   try {
     const agreement = await repository.findById(req.params.id);
-    if (!agreement) {
+    if (!agreement || !isOwner(agreement, req.user)) {
       return res.status(404).json({
         success: false,
         error: { code: 'NOT_FOUND', message: 'That agreement could not be found.' }
@@ -223,7 +222,7 @@ async function getAgreement(req, res, next) {
 async function getAgreementReport(req, res, next) {
   try {
     const agreement = await repository.findById(req.params.id);
-    if (!agreement) {
+    if (!agreement || !isOwner(agreement, req.user)) {
       return res.status(404).json({
         success: false,
         error: { code: 'NOT_FOUND', message: 'That agreement could not be found.' }
@@ -260,6 +259,9 @@ async function getAgreementReport(req, res, next) {
         riskSummary: agreement.riskSummary,
         overallRiskScore: agreement.overallRiskScore,
         overallRisk: agreement.overallRisk,
+        documentSummary: agreement.documentSummary || '',
+        summaryHighlights: agreement.summaryHighlights || [],
+        summaryModel: agreement.summaryModel || '',
         formula: evaluation.formula,
         clauses,
         categoryBreakdown: Object.entries(categoryCounts)
@@ -289,6 +291,14 @@ async function getAgreementReport(req, res, next) {
 /** DELETE /api/agreements/:id */
 async function deleteAgreement(req, res, next) {
   try {
+    const existing = await repository.findById(req.params.id);
+    if (!existing || !isOwner(existing, req.user)) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'That agreement could not be found.' }
+      });
+    }
+
     const agreement = await repository.remove(req.params.id);
     if (!agreement) {
       return res.status(404).json({
@@ -307,31 +317,11 @@ async function deleteAgreement(req, res, next) {
   }
 }
 
-/** POST /api/agreements/demo - load the clearly-labelled demo dataset. */
-async function loadDemoAgreements(req, res, next) {
-  try {
-    const result = await demoData.seedDemoData(repository, true);
-    const agreements = await repository.list({ limit: 200 });
-    res.status(201).json({
-      success: true,
-      data: {
-        ...result,
-        agreements: agreements.map(toListItem),
-        notice:
-          'These are illustrative demo records generated by LoanLens. They were not produced by a real PDF analysis.'
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
 module.exports = {
   uploadAgreement,
   analyzeAgreement,
   listAgreements,
   getAgreement,
   getAgreementReport,
-  deleteAgreement,
-  loadDemoAgreements
+  deleteAgreement
 };

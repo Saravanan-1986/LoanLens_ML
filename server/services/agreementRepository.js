@@ -62,12 +62,13 @@ async function findById(id) {
 }
 
 async function list(options = {}) {
-  const { status, limit = 100, includeDemo = true } = options;
+  const { status, limit = 100, includeDemo = true, ownerId } = options;
 
   if (isDbConnected()) {
     const query = {};
     if (status) query.status = status;
     if (!includeDemo) query.isDemo = { $ne: true };
+    if (ownerId) query.ownerId = String(ownerId);
     const docs = await Agreement.find(query)
       .sort({ uploadedAt: -1 })
       .limit(Number(limit) || 100)
@@ -78,6 +79,7 @@ async function list(options = {}) {
   return [...memory.values()]
     .filter((doc) => (status ? doc.status === status : true))
     .filter((doc) => (includeDemo ? true : !doc.isDemo))
+    .filter((doc) => (ownerId ? String(doc.ownerId) === String(ownerId) : true))
     .map(normalise)
     .sort(sortByUploadedAtDesc)
     .slice(0, Number(limit) || 100);
@@ -125,12 +127,39 @@ async function remove(id) {
 }
 
 async function count(filter = {}) {
-  if (isDbConnected()) return Agreement.countDocuments(filter);
+  if (isDbConnected()) {
+    const query = {};
+    if (filter.status) query.status = filter.status;
+    if (filter.isDemo === true) query.isDemo = true;
+    if (filter.ownerId) query.ownerId = String(filter.ownerId);
+    return Agreement.countDocuments(query);
+  }
   return [...memory.values()].filter((doc) => {
     if (filter.status && doc.status !== filter.status) return false;
     if (filter.isDemo === true && doc.isDemo !== true) return false;
+    if (filter.ownerId && String(doc.ownerId) !== String(filter.ownerId)) return false;
     return true;
   }).length;
+}
+
+/**
+ * Permanently remove every demo/sample record.
+ * Used on startup to clear data left behind by an older build.
+ */
+async function removeDemoRecords() {
+  if (isDbConnected()) {
+    const result = await Agreement.deleteMany({ isDemo: true });
+    return result.deletedCount || 0;
+  }
+
+  let removed = 0;
+  for (const [id, doc] of [...memory.entries()]) {
+    if (doc.isDemo) {
+      memory.delete(id);
+      removed += 1;
+    }
+  }
+  return removed;
 }
 
 async function clearAll() {
@@ -150,5 +179,6 @@ module.exports = {
   remove,
   count,
   clearAll,
+  removeDemoRecords,
   isPersistent: () => isDbConnected()
 };

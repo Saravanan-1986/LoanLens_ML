@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, ArrowRight, FileText, FlaskConical } from 'lucide-react';
+import { Activity, ArrowRight, FileText } from 'lucide-react';
 
 import useAgreements from '../hooks/useAgreements';
 import PageHeader from '../components/PageHeader';
@@ -8,10 +8,8 @@ import FilterTabs from '../components/FilterTabs';
 import SearchInput from '../components/SearchInput';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
-import DemoBadge from '../components/DemoBadge';
 import Disclaimer from '../components/Disclaimer';
 import { SkeletonCard } from '../components/Skeleton';
-import { loadDemoAgreements } from '../services/api';
 import { fileStem, formatDateTime, pluralize, timeAgo } from '../utils/format';
 
 const STATUS_TONE = {
@@ -28,7 +26,6 @@ const STATUS_TONE = {
 export default function History() {
   const [status, setStatus] = useState('all');
   const [q, setQ] = useState('');
-  const [demoBusy, setDemoBusy] = useState(false);
   const { data, error, loading, reload } = useAgreements({ limit: 200 });
 
   const list = useMemo(() => {
@@ -38,18 +35,6 @@ export default function History() {
       .filter((a) => !needle || String(a.filename).toLowerCase().includes(needle))
       .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0));
   }, [data, status, q]);
-
-  const demo = async () => {
-    setDemoBusy(true);
-    try {
-      await loadDemoAgreements();
-      await reload();
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      setDemoBusy(false);
-    }
-  };
 
   const options = [
     { key: 'all', label: 'All activity' },
@@ -65,14 +50,9 @@ export default function History() {
         title="History"
         subtitle="Every upload and analysis run, newest first."
         actions={
-          <div className="row row-gap-2">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={demo} disabled={demoBusy}>
-              <FlaskConical size={14} /> {demoBusy ? 'Loading…' : 'Load demo'}
-            </button>
-            <Link className="btn btn-primary btn-sm" to="/analyze">
-              + New analysis
-            </Link>
-          </div>
+          <Link className="btn btn-primary btn-sm" to="/analyze">
+            + New analysis
+          </Link>
         }
       />
 
@@ -87,7 +67,7 @@ export default function History() {
         <div className="card"><div className="card-body">
           <EmptyState icon={Activity} title="No activity yet"
             text="Uploads and analysis runs will show up here as soon as you start."
-            actions={<div className="row row-gap-2 wrap"><Link className="btn btn-primary" to="/analyze">Analyze Agreement</Link><button type="button" className="btn btn-secondary" onClick={demo} disabled={demoBusy}><FlaskConical size={15} />{demoBusy ? 'Loading demo...' : 'Load demo data'}</button></div>} />
+            actions={<Link className="btn btn-primary" to="/analyze">Analyze Agreement</Link>} />
         </div></div>
       ) : null}
       {!loading && !error && list.length ? (
@@ -100,7 +80,6 @@ export default function History() {
               <div className="row-main">
                 <div className="row row-gap-2 wrap">
                   <Link to={`/agreements/${a.id}`} className="row-title" style={{ textDecoration: 'none', color: 'inherit' }}>{fileStem(a.filename)}</Link>
-                  {a.isDemo ? <DemoBadge compact /> : null}
                 </div>
                 <div className="row-meta">
                   Uploaded {formatDateTime(a.uploadedAt)}

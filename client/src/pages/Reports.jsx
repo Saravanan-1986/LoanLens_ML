@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, FlaskConical, LineChart, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, LineChart, ShieldAlert } from 'lucide-react';
 
 import useAgreements from '../hooks/useAgreements';
 import PageHeader from '../components/PageHeader';
@@ -13,7 +13,6 @@ import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Disclaimer from '../components/Disclaimer';
 import { SkeletonCard } from '../components/Skeleton';
-import { loadDemoAgreements } from '../services/api';
 
 /**
  * Risk-focused view: band statistics on top, then every completed analysis
@@ -22,7 +21,6 @@ import { loadDemoAgreements } from '../services/api';
 export default function Reports() {
   const [band, setBand] = useState('All');
   const [q, setQ] = useState('');
-  const [demoBusy, setDemoBusy] = useState(false);
   const { data, error, loading, reload } = useAgreements({ status: 'completed', limit: 200 });
 
   const stats = data?.stats || {};
@@ -38,18 +36,6 @@ export default function Reports() {
       .sort((a, b) => (b.overallRiskScore || 0) - (a.overallRiskScore || 0));
   }, [data, band, q]);
 
-  const demo = async () => {
-    setDemoBusy(true);
-    try {
-      await loadDemoAgreements();
-      await reload();
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      setDemoBusy(false);
-    }
-  };
-
   const options = [
     { key: 'All', label: 'All bands', count: total },
     { key: 'High', label: 'High risk', count: bands.High },
@@ -64,14 +50,9 @@ export default function Reports() {
         title="Risk Reports"
         subtitle="Completed analyses ordered by overall risk score."
         actions={
-          <div className="row row-gap-2">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={demo} disabled={demoBusy}>
-              <FlaskConical size={14} /> {demoBusy ? 'Loading…' : 'Load demo'}
-            </button>
-            <Link className="btn btn-primary btn-sm" to="/analyze">
-              + New analysis
-            </Link>
-          </div>
+          <Link className="btn btn-primary btn-sm" to="/analyze">
+            + New analysis
+          </Link>
         }
       />
 
@@ -93,8 +74,8 @@ export default function Reports() {
       {!loading && !error && !total ? (
         <div className="card"><div className="card-body">
           <EmptyState icon={ShieldAlert} title="No risk reports yet"
-            text="Reports appear once an agreement finishes analysis. Load the demo set to explore the risk view."
-            actions={<div className="row row-gap-2 wrap"><Link className="btn btn-primary" to="/analyze">Analyze Agreement</Link><button type="button" className="btn btn-secondary" onClick={demo} disabled={demoBusy}><FlaskConical size={15} />{demoBusy ? 'Loading demo...' : 'Load demo data'}</button></div>} />
+            text="Reports appear once an agreement finishes analysis. Upload a PDF to get started."
+            actions={<Link className="btn btn-primary" to="/analyze">Analyze Agreement</Link>} />
         </div></div>
       ) : null}
       {!loading && !error && total ? (

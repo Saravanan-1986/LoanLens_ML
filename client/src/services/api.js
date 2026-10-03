@@ -23,6 +23,33 @@ const http = axios.create({
   headers: { Accept: 'application/json' }
 });
 
+/* ------------------------------------------------------------------ */
+/* Session token                                                       */
+/* The AuthContext owns the token and pushes it here; the request       */
+/* interceptor then attaches it to every call. A 401 response can also  */
+/* notify the app so it can return the user to the sign-in screen.      */
+/* ------------------------------------------------------------------ */
+
+let authToken = '';
+let onUnauthorized = null;
+
+export function setAuthToken(token) {
+  authToken = token || '';
+}
+
+/** Register a callback invoked when the API rejects the session (401). */
+export function setUnauthorizedHandler(handler) {
+  onUnauthorized = typeof handler === 'function' ? handler : null;
+}
+
+http.interceptors.request.use((config) => {
+  if (authToken) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${authToken}`;
+  }
+  return config;
+});
+
 /** Turn an axios failure into a friendly, typed ApiError. */
 function toApiError(error) {
   if (axios.isAxiosError(error)) {
@@ -54,7 +81,11 @@ function toApiError(error) {
 
 http.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(toApiError(error))
+  (error) => {
+    const apiError = toApiError(error);
+    if (apiError.status === 401 && onUnauthorized) onUnauthorized(apiError);
+    return Promise.reject(apiError);
+  }
 );
 
 /** Unwrap the API envelope: { success, data } -> data */
@@ -62,6 +93,14 @@ async function unwrap(request) {
   const { data } = await request;
   return data && Object.prototype.hasOwnProperty.call(data, 'data') ? data.data : data;
 }
+
+/* ------------------------------------------------------------------ */
+/* Authentication                                                      */
+/* ------------------------------------------------------------------ */
+
+export const register = (payload) => unwrap(http.post('/auth/register', payload));
+export const login = (payload) => unwrap(http.post('/auth/login', payload));
+export const getCurrentUser = () => unwrap(http.get('/auth/me'));
 
 /* ------------------------------------------------------------------ */
 /* Health + meta                                                       */
@@ -89,8 +128,6 @@ export const getAgreementReport = (id) =>
 
 export const deleteAgreement = (id) =>
   unwrap(http.delete(`/agreements/${encodeURIComponent(id)}`));
-
-export const loadDemoAgreements = () => unwrap(http.post('/agreements/demo'));
 
 /**
  * Upload a PDF. `onProgress` receives a 0-100 integer.

@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import AppLayout from './layouts/AppLayout';
+import RequireAuth from './components/RequireAuth';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Analyze from './pages/Analyze';
 import Processing from './pages/Processing';
@@ -14,19 +16,30 @@ import NotFound from './pages/NotFound';
 
 /**
  * Route map for LoanLens.
+ * /login                sign in / create account (public)
  * /dashboard            landing dashboard
  * /analyze              upload + start analysis
  * /analyze/:id/processing  live pipeline status (polls the API)
  * /report/:id           clause-by-clause report
- * /agreements + /agreements/:id  history / details
+ * /agreements + /agreements/:id  library / details
  * /reports              risk-focused list
  * /history              analysis activity
  * /settings             configuration + transparency
+ *
+ * Everything below /login is wrapped in RequireAuth, so an anonymous visitor
+ * is always sent to the sign-in screen first.
  */
 export default function App() {
   return (
     <Routes>
-      <Route element={<AppLayout />}>
+      <Route path="/login" element={<Login />} />
+      <Route
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/analyze" element={<Analyze />} />

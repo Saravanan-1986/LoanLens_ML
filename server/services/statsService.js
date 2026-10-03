@@ -98,7 +98,8 @@ function toRecentItem(agreement) {
     overallRisk: agreement.overallRisk || 'Low',
     overallRiskScore: agreement.overallRiskScore || 0,
     riskSummary: agreement.riskSummary || { normal: 0, needsReview: 0, risky: 0 },
-    isDemo: Boolean(agreement.isDemo),
+    documentSummary: agreement.documentSummary || '',
+    summaryHighlights: agreement.summaryHighlights || [],
     error: agreement.error || ''
   };
 }

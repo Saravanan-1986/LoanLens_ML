@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, FlaskConical, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 
 import useAsync from '../hooks/useAsync';
 import PageHeader from '../components/PageHeader';
@@ -8,13 +8,12 @@ import ScoreMeter from '../components/ScoreMeter';
 import DistributionBar from '../components/DistributionBar';
 import PipelineStages from '../components/PipelineStages';
 import ClauseCard from '../components/ClauseCard';
-import DemoBadge from '../components/DemoBadge';
 import Disclaimer from '../components/Disclaimer';
+import DocumentSummaryCard from '../components/DocumentSummaryCard';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonBlock, SkeletonCard } from '../components/Skeleton';
 import { analyzeAgreement, deleteAgreement, getAgreement } from '../services/api';
-import { DEMO_NOTICE } from '../utils/constants';
 import { fileStem, formatDateTime, pluralize } from '../utils/format';
 
 /**
@@ -144,13 +143,6 @@ export default function AgreementDetails() {
         }
       />
 
-      {a.isDemo ? (
-        <p className="inline-alert info" style={{ marginBottom: 14 }}>
-          <FlaskConical size={15} />
-          <span>{DEMO_NOTICE}</span>
-        </p>
-      ) : null}
-
       {actionError ? (
         <p className="inline-alert error" style={{ marginBottom: 14 }}>
           <AlertTriangle size={15} />
@@ -181,7 +173,6 @@ export default function AgreementDetails() {
               <div className="kv"><div className="k">Extraction</div><div className="v">{a.extractionMethod || '—'}</div></div>
             </div>
             <div className="row row-gap-2 wrap" style={{ marginTop: 14 }}>
-              {a.isDemo ? <DemoBadge compact /> : null}
               <span className="text-xs muted">Record ID: <span className="mono">{a.id}</span></span>
             </div>
           </div>
@@ -227,6 +218,14 @@ export default function AgreementDetails() {
           )}
         </div>
       </div>
+
+      {a.status === 'completed' ? (
+        <DocumentSummaryCard
+          summary={a.documentSummary}
+          highlights={a.summaryHighlights}
+          model={a.summaryModel}
+        />
+      ) : null}
 
       {a.status === 'completed' && flagged.length ? (
         <div className="card" style={{ marginBottom: 16 }}>

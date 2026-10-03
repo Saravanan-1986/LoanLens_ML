@@ -3,8 +3,9 @@
 /**
  * Mongoose schema for an analysed loan agreement.
  *
- * Demo records (created by the seeder) carry `isDemo: true` so the UI can label
- * them honestly as sample data instead of real analysis output.
+ * The legacy `isDemo` flag is retained only so records left behind by an older
+ * build can be identified and purged on startup (see agreementRepository
+ * `removeDemoRecords`); no new record is ever created as a demo.
  */
 
 const mongoose = require('mongoose');
@@ -55,6 +56,7 @@ const StageSchema = new mongoose.Schema(
 
 const AgreementSchema = new mongoose.Schema(
   {
+    ownerId: { type: String, default: '', index: true },
     filename: { type: String, required: true },
     originalFilename: { type: String, default: '' },
     storedFilename: { type: String, default: '' },
@@ -70,6 +72,11 @@ const AgreementSchema = new mongoose.Schema(
     extractionMethod: { type: String, default: '' },
     analysisSource: { type: String, default: '' },
     summarizerModel: { type: String, default: '' },
+    // Plain-English overview of the whole agreement (one short paragraph) plus
+    // a few key findings, generated alongside the clause-level report.
+    documentSummary: { type: String, default: '' },
+    summaryHighlights: { type: [String], default: [] },
+    summaryModel: { type: String, default: '' },
     totalClauses: { type: Number, default: 0 },
     riskSummary: {
       normal: { type: Number, default: 0 },

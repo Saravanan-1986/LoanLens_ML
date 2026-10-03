@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, FileText, Trash2 } from 'lucide-react';
 
-import DemoBadge from './DemoBadge';
 import { bandBadgeClass } from '../utils/risk';
 import { fileStem, formatDate, pluralize, timeAgo } from '../utils/format';
 
@@ -22,7 +21,6 @@ export default function AgreementCard({ agreement, onDelete, deleting = false, l
               <Link to={detailTo} className="row-title" style={{ textDecoration: 'none', color: 'inherit' }}>
                 {fileStem(agreement.filename)}
               </Link>
-              {agreement.isDemo ? <DemoBadge compact /> : null}
             </div>
             <div className="row-meta">
               {pluralize(agreement.totalClauses || 0, 'clause')} • {timeAgo(agreement.analyzedAt || agreement.uploadedAt)}

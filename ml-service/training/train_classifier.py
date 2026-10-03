@@ -1,13 +1,16 @@
 """Train and evaluate the LoanLens clause risk classifier.
 
-Two candidate models are trained on the same features and the better one (by
+Several candidate models are trained on the same features and the best one (by
 macro F1 on the held-out validation split) is written to
 ``models/artifacts/clause_risk_classifier.joblib``.
 
     python -m training.train_classifier
 
-Features   : TF-IDF word (1-2 grams) + character (3-5 grams)
-Candidates : LogisticRegression, LinearSVC (calibrated to probabilities)
+Features   : TF-IDF word (1-3 grams) + character (3-6 grams) + rule-informed
+             engineered features (models/rule_features.py) so the classifier
+             inherits the documented lending-risk rulebook.
+Candidates : LogisticRegression, LinearSVC (calibrated), SGD (modified_huber)
+             and a soft-voting ensemble of the best learners.
 Metrics    : accuracy / macro F1 / per class report on validation,
              the source-native unfair_tos test split, and our own test split.
 """
@@ -20,13 +23,16 @@ import pathlib
 import time
 
 import joblib
-import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.ensemble import VotingClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from sklearn.pipeline import FeatureUnion, Pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
+
+from models.rule_features import RuleFeatureExtractor
 
 HERE = pathlib.Path(__file__).resolve().parent.parent
 DATA = HERE / "data"
@@ -49,15 +55,21 @@ def xy(rows: list[dict]) -> tuple[list[str], list[str]]:
     return [row["text"] for row in rows], [row["label"] for row in rows]
 
 
-def build_features(max_features: int = 120_000) -> FeatureUnion:
-    """Word + character TF-IDF features (robust to legal boilerplate)."""
+def build_features(max_features: int = 200_000) -> FeatureUnion:
+    """Word + character TF-IDF plus rule-informed engineered features.
+
+    The TF-IDF blocks capture surface wording while the rule block injects the
+    domain knowledge encoded in the risk rulebook (penalties, foreclosure
+    charges, unilateral changes, ...). Fusing the two lifts macro F1 and, in
+    particular, recall on the rare and most important ``Risky`` class.
+    """
     return FeatureUnion(
         [
             (
                 "word",
                 TfidfVectorizer(
                     lowercase=True,
-                    ngram_range=(1, 2),
+                    ngram_range=(1, 3),
                     min_df=2,
                     max_features=max_features,
                     sublinear_tf=True,
@@ -69,10 +81,21 @@ def build_features(max_features: int = 120_000) -> FeatureUnion:
                 TfidfVectorizer(
                     lowercase=True,
                     analyzer="char_wb",
-                    ngram_range=(3, 5),
+                    ngram_range=(3, 6),
                     min_df=3,
                     max_features=max_features,
                     sublinear_tf=True,
+                ),
+            ),
+            (
+                "rules",
+                Pipeline(
+                    [
+                        ("rule", RuleFeatureExtractor()),
+                        # with_mean=False keeps the block sparse and FeatureUnion
+                        # therefore returns a sparse fused matrix.
+                        ("scale", StandardScaler(with_mean=False)),
+                    ]
                 ),
             ),
         ]
@@ -110,54 +133,63 @@ def evaluate(model: Pipeline, texts: list[str], labels: list[str], title: str) -
 
 
 def candidates() -> dict[str, Pipeline]:
-    """The model candidates compared during training."""
+    """The model candidates compared during training (best macro F1 wins).
+
+    Every candidate shares the fused feature space (word TF-IDF + char TF-IDF +
+    rule features). Class weights are balanced because ``Risky`` is the rarest
+    class yet the one we most want to catch.
+    """
+
+    def features() -> FeatureUnion:
+        return build_features()
+
+    def logreg(c_value: float) -> LogisticRegression:
+        return LogisticRegression(
+            C=c_value, max_iter=4000, class_weight="balanced", random_state=42
+        )
+
+    def calibrated_svc(c_value: float) -> CalibratedClassifierCV:
+        return CalibratedClassifierCV(
+            LinearSVC(C=c_value, class_weight="balanced", random_state=42),
+            cv=3,
+            method="sigmoid",
+        )
+
     return {
-        "tfidf+logreg": Pipeline(
+        "rule+logreg-C4": Pipeline([("features", features()), ("model", logreg(4.0))]),
+        "rule+logreg-C2": Pipeline([("features", features()), ("model", logreg(2.0))]),
+        "rule+linearsvc-C05": Pipeline(
+            [("features", features()), ("model", calibrated_svc(0.5))]
+        ),
+        "rule+linearsvc-C1": Pipeline(
+            [("features", features()), ("model", calibrated_svc(1.0))]
+        ),
+        "rule+sgd-mh": Pipeline(
             [
-                ("features", build_features()),
+                ("features", features()),
                 (
                     "model",
-                    LogisticRegression(
-                        C=8.0,
+                    SGDClassifier(
+                        loss="modified_huber",
+                        alpha=1e-5,
                         max_iter=3000,
                         class_weight="balanced",
-                        n_jobs=None,
+                        random_state=42,
                     ),
                 ),
             ]
         ),
-        "tfidf+linearsvc": Pipeline(
+        "ensemble-logreg-svc": Pipeline(
             [
-                ("features", build_features()),
+                ("features", features()),
                 (
                     "model",
-                    CalibratedClassifierCV(
-                        LinearSVC(C=1.0, class_weight="balanced"), cv=3, method="sigmoid"
-                    ),
-                ),
-            ]
-        ),
-        "tfidf+linearsvc-C05": Pipeline(
-            [
-                ("features", build_features()),
-                (
-                    "model",
-                    CalibratedClassifierCV(
-                        LinearSVC(C=0.5, class_weight="balanced"), cv=3, method="sigmoid"
-                    ),
-                ),
-            ]
-        ),
-        "tfidf+logreg-C2": Pipeline(
-            [
-                ("features", build_features()),
-                (
-                    "model",
-                    LogisticRegression(
-                        C=2.0,
-                        max_iter=3000,
-                        class_weight="balanced",
-                        n_jobs=None,
+                    VotingClassifier(
+                        estimators=[
+                            ("logreg", logreg(4.0)),
+                            ("linearsvc", calibrated_svc(0.5)),
+                        ],
+                        voting="soft",
                     ),
                 ),
             ]

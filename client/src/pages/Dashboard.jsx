@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, FileSearch, FileText, FlaskConical, ShieldAlert } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, ArrowRight, FileSearch, FileText, ShieldAlert } from 'lucide-react';
 import useDashboardStats from '../hooks/useDashboardStats';
 import StatCard from '../components/StatCard';
 import ProgressRing from '../components/ProgressRing';
@@ -12,21 +11,11 @@ import Disclaimer from '../components/Disclaimer';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonCard, SkeletonBlock } from '../components/Skeleton';
-import { DEMO_NOTICE } from '../utils/constants';
 import { greeting, pluralize } from '../utils/format';
 import { riskyShare } from '../utils/risk';
-import { loadDemoAgreements } from '../services/api';
 
 export default function Dashboard() {
   const { data, error, loading, reload } = useDashboardStats();
-  const [demoLoading, setDemoLoading] = useState(false);
-  const [demoError, setDemoError] = useState('');
-  const loadDemo = async () => {
-    setDemoLoading(true); setDemoError('');
-    try { await loadDemoAgreements(); await reload(); }
-    catch (err) { setDemoError(err.message || 'Could not load demo data.'); }
-    finally { setDemoLoading(false); }
-  };
   if (loading) return (
     <div className="fade-in">
       <div className="page-head"><div><SkeletonBlock height={14} width={150} /><div style={{ marginTop: 10 }}><SkeletonBlock height={30} width={320} /></div></div><SkeletonBlock height={42} width={210} radius={999} /></div>
@@ -55,9 +44,7 @@ export default function Dashboard() {
         <div className="card" style={{ marginBottom: 18 }}><div className="card-body">
           <EmptyState icon={FileSearch} title="No loan agreements analyzed yet."
             text="Upload your first agreement to see clause-level risk analysis and plain-language summaries."
-            actions={<div className="row row-gap-2 wrap"><Link className="btn btn-primary" to="/analyze">Analyze Agreement<ArrowRight size={15} /></Link><button type="button" className="btn btn-secondary" onClick={loadDemo} disabled={demoLoading}><FlaskConical size={15} />{demoLoading ? 'Loading demo...' : 'Load demo data'}</button></div>} />
-          {demoError ? <p className="field-error" style={{ marginTop: 12 }}>{demoError}</p> : null}
-          <p className="text-xs muted" style={{ marginTop: 14 }}>{DEMO_NOTICE}</p>
+            actions={<Link className="btn btn-primary" to="/analyze">Analyze Agreement<ArrowRight size={15} /></Link>} />
         </div></div>
       ) : null}
       <div className="stat-grid">

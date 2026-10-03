@@ -22,6 +22,11 @@ import re
 
 from utils.config import settings
 
+try:  # The rulebook is pure-regex and safe to import; used to sharpen the fallback.
+    from rules.risk_rules import match_rules as _match_rules
+except Exception:  # noqa: BLE001
+    _match_rules = None  # type: ignore[assignment]
+
 logger = logging.getLogger("loanlens.classifier")
 
 LABELS = ["Normal", "Needs Review", "Risky"]
@@ -58,7 +63,7 @@ def _read_json(path: pathlib.Path) -> dict:
 
 #: Keyword signals: (compiled pattern, weight, risk category).
 HEURISTIC_SIGNALS = [
-    (re.compile(r"\b(?:penalt\w+|late\s+fee|default\s+interest)\b", re.I), 4, "Penalties"),
+    (re.compile(r"\b(?:penalt\w+|late\s+fee|default\s+interest|penal\s+interest)\b", re.I), 4, "Penalties"),
     (re.compile(r"\b(?:foreclos\w+|pre[\s-]?payment)\b", re.I), 4, "Prepayment / Foreclosure"),
     (re.compile(r"\b(?:compoun\w+|capitalis\w+|capitaliz\w+)\b", re.I), 3, "Penalties"),
     (re.compile(r"\b(?:sole\s+discretion|without\s+notice|unilater\w+)\b", re.I), 4, "Interest & APR"),
@@ -70,6 +75,16 @@ HEURISTIC_SIGNALS = [
     (re.compile(r"\b(?:at\s+any\s+time|may\s+modify|amendment)\b", re.I), 2, "Interest & APR"),
     (re.compile(r"\b(?:non[\s-]?refundable|processing\s+fee|documentation\s+charge)\b", re.I), 2, "Fees & Charges"),
     (re.compile(r"\b(?:notwithstanding|whatsoever|hereunder)\b", re.I), 1, "Legal Rights"),
+    # Additional lending-specific signals that lift fallback recall on the
+    # clauses the rulebook cares about most.
+    (re.compile(r"\b(?:indemnif\w+|indemnit\w+|hold\s+harmless)\b", re.I), 4, "Liability"),
+    (re.compile(r"\b(?:sole\s+arbitrator|arbitration|arbitrator|arbitral)\b", re.I), 3, "Legal Rights"),
+    (re.compile(r"\b(?:conclusive\s+and\s+binding|shall\s+not\s+be\s+challenged|binding\s+on\s+the\s+borrower)\b", re.I), 3, "Legal Rights"),
+    (re.compile(r"\b(?:blank\s+cheque|security\s+cheque|post[\s-]?dated\s+cheque)\b", re.I), 3, "Security & Collateral"),
+    (re.compile(r"\b(?:credit\s+information\s+compan\w+|credit\s+bureau|CIBIL)\b", re.I), 2, "Data & Privacy"),
+    (re.compile(r"\b(?:enter\s+upon|inspect(?:ion)?\s+of\s+the\s+(?:premises|property|security))\b", re.I), 3, "Recovery Practices"),
+    (re.compile(r"\b(?:assign\w*|transfer\w*)\b[^.]{0,40}\b(?:without\s+consent|at\s+its\s+discretion)\b", re.I), 3, "Legal Rights"),
+    (re.compile(r"\b(?:full\s+indemnity|all\s+expenses|legal\s+expenses)\b", re.I), 2, "Liability"),
 ]
 
 AMBIGUITY_SIGNALS = [
@@ -401,7 +416,12 @@ class RiskClassifier:
 
     @staticmethod
     def predict_heuristic(text: str) -> dict:
-        """Transparent keyword/heuristic classifier used as the fallback."""
+        """Transparent keyword/heuristic classifier used as the fallback.
+
+        It deliberately reuses the documented rulebook so that, even with no
+        trained model available, the labels agree with the rules the product
+        already applies and the reported category is meaningful.
+        """
         haystack = text or ""
         score = 0
         category = "Uncategorised"
@@ -413,6 +433,13 @@ class RiskClassifier:
                 if weight > top_weight:
                     top_weight = weight
                     category = signal_category
+
+        rule = _match_rules(haystack) if _match_rules else None
+        if rule:
+            severity = rule.get("severity", "LOW")
+            score += {"HIGH": 5, "MEDIUM": 3}.get(severity, 2)
+            if category == "Uncategorised" or severity == "HIGH":
+                category = rule.get("category", category)
 
         ambiguous = any(pattern.search(haystack) for pattern in AMBIGUITY_SIGNALS)
         if ambiguous:

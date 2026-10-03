@@ -1,7 +1,6 @@
 import { ArrowRight, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import DemoBadge from './DemoBadge';
 import RiskBadge from './RiskBadge';
 import { bandClass } from '../utils/risk';
 import { fileStem, timeAgo, pluralize } from '../utils/format';
@@ -35,7 +34,6 @@ export default function RecentAnalysisCard({ analysis }) {
                 <span className="strong" style={{ fontSize: 15 }}>
                   {fileStem(analysis.filename)}
                 </span>
-                {analysis.isDemo ? <DemoBadge compact /> : null}
               </div>
               <div className="meta-row">
                 <span>{analysis.uploadedLabel || timeAgo(analysis.analyzedAt)}</span>
@@ -76,9 +74,7 @@ export default function RecentAnalysisCard({ analysis }) {
 
         <div className="row-between wrap row-gap-3">
           <span className="text-xs muted">
-            {analysis.analysisSource === 'demo-seed'
-              ? 'Illustrative sample data - not a real analysis'
-              : `Engine: ${analysis.analysisSource || 'analysis pipeline'}`}
+            {`Engine: ${analysis.analysisSource || 'analysis pipeline'}`}
           </span>
           <Link className="btn btn-primary btn-sm" to={`/report/${analysis.id}`}>
             View report

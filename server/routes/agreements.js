@@ -1,8 +1,7 @@
 'use strict';
 
 /**
- * Agreement routes.
- * NOTE: `/demo` is declared before `/:id` so it is not captured as an id.
+ * Agreement routes (all require a signed-in user; see server.js).
  */
 
 const express = require('express');
@@ -14,7 +13,6 @@ const router = express.Router();
 
 // Create
 router.post('/upload', uploadSingle('file'), asyncHandler(controller.uploadAgreement));
-router.post('/demo', asyncHandler(controller.loadDemoAgreements));
 
 // Read
 router.get('/', asyncHandler(controller.listAgreements));

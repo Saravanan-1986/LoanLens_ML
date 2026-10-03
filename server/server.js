@@ -17,14 +17,15 @@ const { connectDb, disconnectDb, getDbStatus } = require('./config/db');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const notFound = require('./middleware/notFound');
+const { requireAuth } = require('./middleware/auth');
 
 const healthRoutes = require('./routes/health');
+const authRoutes = require('./routes/auth');
 const agreementRoutes = require('./routes/agreements');
 const dashboardRoutes = require('./routes/dashboard');
 
 const repository = require('./services/agreementRepository');
 const mlService = require('./services/mlService');
-const demoData = require('./seed/demoData');
 
 const app = express();
 
@@ -57,10 +58,12 @@ app.get('/api', (_req, res) => {
         'LoanLens is an awareness and screening tool. It does not provide legal advice.',
       endpoints: [
         'GET    /api/health',
+        'POST   /api/auth/register',
+        'POST   /api/auth/login',
+        'GET    /api/auth/me',
         'GET    /api/dashboard/stats',
         'GET    /api/dashboard/meta',
         'POST   /api/agreements/upload',
-        'POST   /api/agreements/demo',
         'GET    /api/agreements',
         'GET    /api/agreements/:id',
         'GET    /api/agreements/:id/report',
@@ -72,8 +75,9 @@ app.get('/api', (_req, res) => {
 });
 
 app.use('/api/health', healthRoutes);
-app.use('/api/agreements', agreementRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/agreements', requireAuth, agreementRoutes);
+app.use('/api/dashboard', requireAuth, dashboardRoutes);
 
 // SPA fallback for the built client (never intercepts /api routes).
 if (fs.existsSync(clientDist)) {
@@ -92,19 +96,18 @@ app.use(errorHandler);
 /* ------------------------------------------------------------------ */
 
 async function initialiseData() {
-  if (!(config.demoMode && config.seedDemoData)) return;
+  // Demo/sample data is no longer part of the product. Any records created by
+  // an older build are removed so the library and history only ever contain
+  // real analyses performed by a signed-in user.
+  if (!config.purgeDemoData) return;
 
   try {
-    const result = await demoData.seedDemoData(repository, false);
-    if (result.seeded) {
-      logger.info(
-        `Seeded ${result.seeded} demo agreements (clearly labelled sample data for demonstration).`
-      );
-    } else {
-      logger.info('Demo seeding skipped - agreements already exist in the store.');
+    const removed = await repository.removeDemoRecords();
+    if (removed) {
+      logger.info(`Removed ${removed} legacy demo record(s) from the store.`);
     }
   } catch (error) {
-    logger.warn(`Demo seeding failed: ${error.message}`);
+    logger.warn(`Demo cleanup failed: ${error.message}`);
   }
 }
 

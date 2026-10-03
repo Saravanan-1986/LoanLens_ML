@@ -20,6 +20,7 @@ const repository = require('./agreementRepository');
 const mlService = require('./mlService');
 const riskService = require('./riskService');
 const documentService = require('./documentService');
+const documentSummaryService = require('./documentSummaryService');
 const fallback = require('./fallbackAnalyzer');
 const { extractPdfText } = require('./pdfExtract');
 const logger = require('../utils/logger');
@@ -251,7 +252,7 @@ async function runAnalysis(agreement) {
     await tracker.set(
       'generating_summaries',
       'completed',
-      `${summaries.length} plain-English summaries generated`
+      `${summaries.length} clause summaries generated`
     );
 
     /* --- 6. Assemble report + score ---------------------------- */
@@ -284,6 +285,7 @@ async function runAnalysis(agreement) {
     });
 
     const evaluation = riskService.evaluateDocument(finalClauses);
+    const documentSummary = documentSummaryService.buildDocumentSummary(finalClauses, { evaluation });
 
     await repository.update(agreement.id, {
       clauses: finalClauses,
@@ -291,6 +293,9 @@ async function runAnalysis(agreement) {
       riskSummary: evaluation.riskSummary,
       overallRiskScore: evaluation.overallRiskScore,
       overallRisk: evaluation.overallRisk,
+      documentSummary: documentSummary.summary,
+      summaryHighlights: documentSummary.highlights,
+      summaryModel: documentSummary.model,
       extractionMethod: extraction.method,
       analysisSource: engine,
       summarizerModel,
@@ -302,7 +307,7 @@ async function runAnalysis(agreement) {
     await tracker.set(
       'preparing_report',
       'completed',
-      `Overall risk ${evaluation.overallRisk} (${evaluation.overallRiskScore}/100)`
+      `Document summary written; overall risk ${evaluation.overallRisk} (${evaluation.overallRiskScore}/100)`
     );
     await tracker.sync({ status: 'completed', progress: 100 });
 

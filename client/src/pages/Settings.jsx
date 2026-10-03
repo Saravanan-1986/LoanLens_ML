@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Cpu, Database, FlaskConical, RefreshCw, ScanEye, Server } from 'lucide-react';
+import { Cpu, Database, RefreshCw, ScanEye, Server } from 'lucide-react';
 
 import useAsync from '../hooks/useAsync';
 import PageHeader from '../components/PageHeader';
@@ -8,8 +7,8 @@ import Disclaimer from '../components/Disclaimer';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonCard } from '../components/Skeleton';
-import { getDashboardMeta, getHealth, loadDemoAgreements } from '../services/api';
-import { APP_NAME, DEMO_NOTICE } from '../utils/constants';
+import { getDashboardMeta, getHealth } from '../services/api';
+import { APP_NAME } from '../utils/constants';
 
 function StatusPill({ ok, labelOn = 'Available', labelOff = 'Unavailable' }) {
   return <span className={`status-pill ${ok ? 'ok' : 'off'}`}>{ok ? labelOn : labelOff}</span>;
@@ -19,23 +18,6 @@ function StatusPill({ ok, labelOn = 'Available', labelOff = 'Unavailable' }) {
 export default function Settings() {
   const health = useAsync(() => getHealth(), []);
   const meta = useAsync(() => getDashboardMeta(), []);
-  const [demoBusy, setDemoBusy] = useState(false);
-  const [demoMsg, setDemoMsg] = useState('');
-
-  const loadDemo = async () => {
-    setDemoBusy(true);
-    setDemoMsg('');
-    try {
-      const result = await loadDemoAgreements();
-      const seeded = result?.seeded ?? result?.inserted ?? result?.count;
-      setDemoMsg(seeded ? `Loaded ${seeded} demo records.` : 'Demo records refreshed.');
-      await meta.reload();
-    } catch (e) {
-      setDemoMsg(e.message || 'Could not load demo data.');
-    } finally {
-      setDemoBusy(false);
-    }
-  };
 
   const h = health.data || {};
   const deps = h.dependencies || {};
@@ -94,15 +76,13 @@ export default function Settings() {
 
           <div className="column-stack">
             <div className="card">
-              <div className="card-head"><h3>Demo data</h3></div>
+              <div className="card-head"><h3>Your library</h3></div>
               <div className="card-body stack-3">
-                <p className="text-sm muted">Seed the database with illustrative agreements so the interface can be explored without a PDF. Demo records are always labelled.</p>
+                <p className="text-sm muted">Every agreement you upload is analysed and kept in your own library. Open it to review clause-level risk, plain-language summaries and the exported reports.</p>
                 <div className="row row-gap-2 wrap">
-                  <button type="button" className="btn btn-primary btn-sm" onClick={loadDemo} disabled={demoBusy}><FlaskConical size={14} /> {demoBusy ? 'Loading…' : 'Load demo data'}</button>
+                  <Link className="btn btn-primary btn-sm" to="/analyze">Analyze a document</Link>
                   <Link className="btn btn-secondary btn-sm" to="/agreements">Go to library</Link>
                 </div>
-                {demoMsg ? <p className="inline-alert success"><span>{demoMsg}</span></p> : null}
-                <p className="text-xs muted">{DEMO_NOTICE}</p>
               </div>
             </div>
             <div className="card">

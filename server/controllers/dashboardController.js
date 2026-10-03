@@ -13,7 +13,7 @@ const analysisPipeline = require('../services/analysisPipeline');
 /** GET /api/dashboard/stats */
 async function getDashboardStats(req, res, next) {
   try {
-    const agreements = await repository.list({ limit: 200 });
+    const agreements = await repository.list({ limit: 200, ownerId: req.user.id });
     const stats = buildAggregateStats(agreements);
     const completed = agreements.filter((item) => item.status === 'completed');
     const latest = completed[0] || null;
@@ -27,6 +27,7 @@ async function getDashboardStats(req, res, next) {
               ...toRecentItem(latest),
               extractionMethod: latest.extractionMethod || '',
               analysisSource: latest.analysisSource || '',
+              documentSummary: latest.documentSummary || '',
               summaryLine: latest.riskSummary || { normal: 0, needsReview: 0, risky: 0 }
             }
           : null,
@@ -40,7 +41,6 @@ async function getDashboardStats(req, res, next) {
             status: item.status,
             progress: item.progress || 0
           })),
-        demoMode: repository.isPersistent() ? false : true,
         activeRules: RISK_RULES.length,
         disclaimer:
           'LoanLens is an awareness and screening tool and does not provide legal advice.'

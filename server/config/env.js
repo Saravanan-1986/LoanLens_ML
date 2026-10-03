@@ -48,8 +48,21 @@ const config = {
   maxUploadMb,
   maxUploadBytes: maxUploadMb * 1024 * 1024,
 
-  demoMode: toBool(process.env.DEMO_MODE, true),
-  seedDemoData: toBool(process.env.SEED_DEMO_DATA, true)
+  // Demo/pre-seeded sample data is disabled by default: the library and history
+  // must only ever contain real analyses. `purgeDemoData` removes any demo
+  // records left over from an older build the next time the server boots.
+  demoMode: toBool(process.env.DEMO_MODE, false),
+  seedDemoData: toBool(process.env.SEED_DEMO_DATA, false),
+  purgeDemoData: toBool(process.env.PURGE_DEMO_DATA, true),
+
+  // ---------------------------------------------------------------------------
+  // Authentication
+  // AUTH_SECRET signs the session tokens (HMAC-SHA256). Set a long, random
+  // value in production; the fallback keeps local development working.
+  // ---------------------------------------------------------------------------
+  authSecret:
+    (process.env.AUTH_SECRET || 'loanlens-local-dev-secret-please-change').trim(),
+  authTokenTtlHours: toInt(process.env.AUTH_TOKEN_TTL_HOURS, 24 * 7)
 };
 
 module.exports = config;

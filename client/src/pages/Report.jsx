@@ -9,13 +9,13 @@ import RiskDonut from '../components/RiskDonut';
 import RiskLegend from '../components/RiskLegend';
 import DistributionBar from '../components/DistributionBar';
 import Disclaimer from '../components/Disclaimer';
-import DemoBadge from '../components/DemoBadge';
+import DocumentSummaryCard from '../components/DocumentSummaryCard';
 import FilterTabs from '../components/FilterTabs';
 import SearchInput from '../components/SearchInput';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import { SkeletonBlock, SkeletonCard } from '../components/Skeleton';
-import { RISK, RISK_FILTERS, DEMO_NOTICE } from '../utils/constants';
+import { RISK, RISK_FILTERS } from '../utils/constants';
 import { fileStem, formatDateTime, pluralize } from '../utils/format';
 export default function Report() {
   const { id } = useParams();
@@ -55,7 +55,6 @@ export default function Report() {
     <div className="fade-in">
       <PageHeader eyebrow="Loan Agreement Analysis" title={fileStem(a.filename)} subtitle={`Analyzed ${formatDateTime(a.analyzedAt)} • ${pluralize(a.totalClauses || 0, 'clause')} • ${a.extractionMethod || 'pdf extraction'}`}
         actions={<div className="row row-gap-2"><button type="button" className="btn btn-secondary btn-sm" onClick={csv}><Download size={14} /> Export CSV</button><button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpenAll((v) => !v)}>{openAll ? 'Collapse all' : 'Expand all'}</button></div>} />
-      {a.isDemo ? <p className="inline-alert info" style={{ marginBottom: 14 }}><span>{DEMO_NOTICE}</span></p> : null}
       <div className="card" style={{ marginBottom: 16 }}><div className="card-body">
         <div className="report-hero">
           <ScoreMeter score={a.overallRiskScore} band={a.overallRisk} formula={rep.formula?.note || ''} />
@@ -73,9 +72,9 @@ export default function Report() {
         <div className="row row-gap-2 wrap" style={{ marginTop: 14 }}>
           <span className="text-xs muted">Engine: {a.analysisSource || 'pipeline'}</span>
           <span className="text-xs muted">Model: {a.summarizerModel || 'fallback'}</span>
-          {a.isDemo ? <DemoBadge compact /> : null}
         </div>
       </div></div>
+      <DocumentSummaryCard summary={rep.documentSummary} highlights={rep.summaryHighlights} model={rep.summaryModel} />
       <Disclaimer />
       <div style={{ margin: '16px 0' }}>
         <div className="filter-bar">

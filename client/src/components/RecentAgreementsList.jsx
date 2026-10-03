@@ -1,7 +1,6 @@
 import { ArrowRight, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import DemoBadge from './DemoBadge';
 import RiskBadge from './RiskBadge';
 import { fileStem, pluralize, timeAgo } from '../utils/format';
 
@@ -32,7 +31,6 @@ export default function RecentAgreementsList({ agreements = [] }) {
               <div className="row-meta">
                 {pluralize(agreement.totalClauses || 0, 'clause')} &bull;{' '}
                 {timeAgo(agreement.analyzedAt || agreement.uploadedAt)}
-                {agreement.isDemo ? ' • demo' : ''}
               </div>
             </div>
 
